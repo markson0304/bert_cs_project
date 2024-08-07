@@ -5,11 +5,16 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from datasets import load_dataset # consider local dataset
-from torch.utils.data import Dataloader
+from torch.utils.data import DataLoader
 from torch.optim import AdamW
 from transformers import get_scheduler
 import evaluate
 from typing import List, Dict
+import pandas as pd
+import os
+from sklearn.model_selection import train_test_split
+from sklearn.utils import shuffle
+from PIL import Image
 
 def SSA(T: List[Dict], x, k: int): # Sample Search Approach for contrastive learning
     # args:
@@ -28,7 +33,7 @@ def SSA(T: List[Dict], x, k: int): # Sample Search Approach for contrastive lear
     for sample in T:
         # if i.label == x.label:
         if sample['label'] == x['label']:
-            S_p.apeend(sample)
+            S_p.append(sample)
         else:
             S_n.append(sample)
 
@@ -125,11 +130,6 @@ class Fake_news_detection(nn.Module):
     self.bert_model = BertModel.from_pretrained(self.bert)
     self.fc1 = nn.Linear(self.bert_model.config.hidden_size, 768) # check dim setting
     
-    #ResNet50 extracts image feature: image  → feature e^i → feature e^i'
-    self.processor = AutoImageProcessor.from_pretrained(self.resnet)
-    self.resnet_model = ResNetForImageClassification.from_pretrained(self.resnet)
-    self.fc2 = nn.Linear(self.resnet_model.config.hidden_size, 512) #check dim setting
-    self.fc3 = nn.Linear(512, 768) #check dim setting
 
     # self.transformer1 = nn.Transformer()
     self.transformer1 = nn.TransformerEncoder(
@@ -138,7 +138,7 @@ class Fake_news_detection(nn.Module):
     )
     
     # fusion
-    self.multihead_attn = nn.MultiheadAttention(embed_dim=(768 * 2), num_heads=8)
+    #self.multihead_attn = nn.MultiheadAttention(embed_dim=(768 * 2), num_heads=8)
 
     #joint learning:cross-entropy
     self.pool1 = nn.AdaptiveAvgPool1d(1)
@@ -150,27 +150,14 @@ class Fake_news_detection(nn.Module):
     
   def forward(self, x):
     # text feature extraction
-    feature_text = self.tokenizer(x.text, return_tensors='pt', padding=True, truncation=True, max_length=256)
+    feature_text = self.tokenizer(x['text'], return_tensors='pt', padding=True, truncation=True, max_length=256)
     feature_text = self.bert_model(**feature_text).last_hidden_state
     feature_text = F.relu(self.fc1(feature_text))
 
-    # image feature extraction
-    image_inputs = self.processor(x.image, return_tensors='pt')
-    image_output = self.resnet_model(**image_inputs).pooler_output
-    feature_image = F.relu(self.fc2(image_output))
-    feature_image = F.relu(self.fc3(feature_image))
 
-    # image Transformer encoding
-    feature_image = feature_image.unsqueeze(0) # Add a dimension
-    feature_image = self.transformer1(feature_image).squeeze(0)
-
-
-    # fusion
-    feature_fusion = torch.cat((feature_text, feature_image), dim=1).unsqueeze(0)
-    feature_fusion, _ = self.multihead_attn(feature_fusion, feature_fusion, feature_fusion) # 2 output, attn_output & attn_output_weights
     
     # predict
-    y = self.pool1(feature_fusion.permute(1, 2, 0)).squeeze() # origin dim : (sequence_length, batch_size, feature_dim) -> (batch_size, feature_dim, sequence_length)
+    y = self.pool1(feature_text.permute(1, 2, 0)).squeeze() # origin dim : (sequence_length, batch_size, feature_dim) -> (batch_size, feature_dim, sequence_length)
     y = self.pool2(y.unsqueeze(-1)).squeeze() # undersampling
     y = self.dropout(y)
     y = self.sigmoid(y)
@@ -189,17 +176,81 @@ if __name__ == '__main__':
     
     # load model if exists, o.w. new 
     model = Fake_news_detection()
+    #if (os.path.exists("model/")):
+        #checkpoint = torch.load(PATH)
+        #model.load_state_dict(checkpoint)
 
     # load dataset
-    train_set =
-    test_set = 
+    # code參考來源 確認執行正常後刪除
+    # https://discuss.huggingface.co/t/how-to-load-a-huggingface-dataset-from-local-path/53076 
+    # https://github.com/huggingface/datasets/issues/6691
+    # =======================================================
+
     
+    ## data_files = {'real':'BuzzFeed_fake_news_content.csv','fake':'BuzzFeed_fak.csv'}
+    ## raw_datasets = load_dataset(name='csv', data_dir='./fakenewsnet', data_files=data_files, delimiter=',')
+    
+    #raw_datasets.remove_columns(["3_way_label", "6_way_label"])
+    #raw_datasets.rename_column("2_way_label", "label")
+    ##raw_datasets.set_format("torch")
+
+
+
+
+    # read CSV file
+    
+    ## BuzzFeed
+    df_BuzzFeed_real=pd.read_csv('fakenewsnet/BuzzFeed_fake_news_content.csv')
+    df_BuzzFeed_fake=pd.read_csv('fakenewsnet/BuzzFeed_real_news_content.csv')
+    ## politiFact
+    df_politiFact_real=pd.read_csv('fakenewsnet/PolitiFact_fake_news_content.csv')
+    df_politiFact_fake=pd.read_csv('fakenewsnet/PolitiFact_real_news_content.csv')
+
+    ## combine these two dataframes into a single dataframe
+    #df_BuzzFeed_real['image'] = df_BuzzFeed_real.apply(lambda x: Image.open(f"dataset_images/{x.name}.jpg") if os.path.exists(f"dataset_images/{x.name}.jpg") else None, axis=1)
+    #df_BuzzFeed_real = df_BuzzFeed_real[df_BuzzFeed_real['image'].notnull()]
+    #df_BuzzFeed_fake['image'] = df_BuzzFeed_fake.apply(lambda x: Image.open(f"dataset_images/{x.name}.jpg") if os.path.exists(f"dataset_images/{x.name}.jpg") else None, axis=1)
+    #df_BuzzFeed_fake = df_BuzzFeed_fake[df_BuzzFeed_fake['image'].notnull()]
+    #df_politiFact_real['image'] = df_politiFact_real.apply(lambda x: Image.open(f"dataset_images/{x.name}.jpg") if os.path.exists(f"dataset_images/{x.name}.jpg") else None, axis=1)
+    #df_politiFact_real = df_politiFact_real[df_politiFact_real['image'].notnull()]
+    #df_politiFact_fake['image'] = df_politiFact_fake.apply(lambda x: Image.open(f"dataset_images/{x.name}.jpg") if os.path.exists(f"dataset_images/{x.name}.jpg") else None, axis=1)
+    #df_politiFact_fake = df_politiFact_fake[df_politiFact_fake['image'].notnull()]
+###########################
+
+    df_BuzzFeed=pd.concat([df_BuzzFeed_real,df_BuzzFeed_fake],axis=0)
+    df_politiFact=pd.concat([df_politiFact_real,df_politiFact_fake],axis=0)
+    df_text = pd.concat([df_BuzzFeed, df_politiFact])
+
+    df_text = shuffle(df_text)
+    
+    ##新增一行news type
+    ## Fake: id -> Fake_1-Webpage; Real: id -> Real_1-Webpage
+    df_text['label']=df_text['id'].apply(lambda x: x.split('_')[0])
+
+    content_text=df_text['text']
+    label_text=df_text['label']
+
+    
+    ##分成測試集和訓練集 , 取30%資料為測試集
+    text_train, text_test, label_train, label_test = train_test_split(content_text, label_text, test_size=0.3, random_state=42)
+    
+    train_data = [{'text': text, 'label': label} for text, label in zip(text_train, label_train)]
+    test_data = [{'text': text, 'label': label} for text, label in zip(text_test, label_test)]
+
+    train_dataloader = DataLoader(dataset=train_data, batch_size=batchsize, shuffle=True)
+    test_dataloader = DataLoader(dataset=test_data, batch_size=batchsize, shuffle=False)
+    ##============================================================
+
     # preprocess train_set: data augmentation(back translation), feature extracted for compute cos_sim
-        # not yet determine tranlation method
+        # not yet determine translation method
         # not yet determine feature extract method
+        # small dataset for code debug
+    #train_dataset = raw_datasets["train"].shuffle(seed=42).select(range(100))
+    #test_dataset = raw_datasets["test"].shuffle(seed=42).select(range(100))
+
     # construct dataloader
-    train_dataloader = Dataloader(train_set, batch_size=batchsize)
-    test_dataloader = Dataloader(test_set, batch_size=batchsize)
+    #train_dataloader = Dataloader(dataset=train_dataset, batch_size=batchsize)
+    #test_dataloader = Dataloader(dataset=test_dataset, batch_size=batchsize)
     
     
     # set loss function
@@ -213,20 +264,33 @@ if __name__ == '__main__':
 
     
     # training loop
+    model.train()
     for epoch in range(num_epochs):
         for batch in train_dataloader: # huggingface turtorial need to check how to access batch
-            batch = {k: v.to(device) for k, v in batch.items()} #key, value?
-            outputs = model(**batch)
+            #batch = {k: v.to(device) for k, v in batch.items()}
+
+            # ========================================            
+            text_inputs = batch['text']
+            labels = batch['label'].to(device)
+
+            text_inputs = [text.to(device) for text in text_inputs]  # 需要根據實際情況調整
+
+            # Forward pass
+            outputs = model({'text': text_inputs})
+            # ========================================
+            # outputs = model(**batch)
             
             # Compute Loss 
-            loss = custom_criterion(k, outputs, ) #wait loss function completed
+            loss = custom_criterion(labels, outputs, batch) #wait loss function completed
+            # loss = custom_criterion(labels, outputs, batch) #wait loss function completed
             loss.backward()
 
             # Backward pass
             optimizer.step()
             lr_scheduler.step()
             optimizer.zero_grad() #chatGPT: reset gradient → assume gradient init 0
-        
+    # save model
+    # torch.save(model.state_dict(), "model/")
 
     # test loop
     ### copy from huggingface "fine-tune a pretrained model"
