@@ -91,7 +91,7 @@ class Custom_loss(nn.Module):
         cross_entropy_loss = self.loss1_fn(predict, label)
 
         ################# Contrastive Loss ###################
-        S_p, S_n = SSA(train_set, input, sample_set_size) #(看要不要傳train_set)
+        S_p, S_n = SSA(train_set, input, sample_set_size) # type: ignore #(看要不要傳train_set)
         
         # Compute cosine similarities
         # cos_sim(x, sp)
@@ -151,16 +151,23 @@ class Fake_news_detection(nn.Module):
   def forward(self, x):
     # text feature extraction
     feature_text = self.tokenizer(x['text'], return_tensors='pt', padding=True, truncation=True, max_length=256)
-    feature_text = self.bert_model(**feature_text).last_hidden_state
+    feature_text = self.bert_model(**feature_text).pooler_output
     feature_text = F.relu(self.fc1(feature_text))
 
-
+    print(f"feature_text shape after BERT and Linear: {feature_text.shape}")
     
     # predict
-    y = self.pool1(feature_text.permute(1, 2, 0)).squeeze() # origin dim : (sequence_length, batch_size, feature_dim) -> (batch_size, feature_dim, sequence_length)
-    y = self.pool2(y.unsqueeze(-1)).squeeze() # undersampling
+    # y = self.pool1(feature_text.permute(1, 2, 0)).squeeze() # origin dim : (sequence_length, batch_size, feature_dim) -> (batch_size, feature_dim, sequence_length)
+    # y = self.pool2(y.unsqueeze(-1)).squeeze() # undersampling
+    # y = self.dropout(y)
+    # y = self.sigmoid(y)
+    ##
+    y = self.pool1(feature_text.permute(0, 2, 1)).squeeze(-1)  # permute to [batch_size, feature_dim, seq_length]
     y = self.dropout(y)
     y = self.sigmoid(y)
+
+
+    print(f"Output shape after pooling: {y.shape}")
 
     return y
 
@@ -173,9 +180,20 @@ num_epochs = 100
 
 
 if __name__ == '__main__':
+
+    #check dict
+
+    os.makedirs("model", exist_ok=True)
     
-    # load model if exists, o.w. new 
     model = Fake_news_detection()
+    if os.path.exists("model/checkpoint.pth"):
+        checkpoint = torch.load("model/checkpoint.pth")
+        model.load_state_dict(checkpoint)
+        print("Loaded model from checkpoint.")
+    else:
+        print("No checkpoint found, starting with a new model.")
+        
+    # load model if exists, o.w. new 
     #if (os.path.exists("model/")):
         #checkpoint = torch.load(PATH)
         #model.load_state_dict(checkpoint)
@@ -194,17 +212,15 @@ if __name__ == '__main__':
     #raw_datasets.rename_column("2_way_label", "label")
     ##raw_datasets.set_format("torch")
 
+    ## read csv
 
 
-
-    # read CSV file
-    
     ## BuzzFeed
-    df_BuzzFeed_real=pd.read_csv('fakenewsnet/BuzzFeed_fake_news_content.csv')
-    df_BuzzFeed_fake=pd.read_csv('fakenewsnet/BuzzFeed_real_news_content.csv')
+    df_BuzzFeed_real=pd.read_csv(r'bert_cs_project\dataset_bert\BuzzFeed_real_news_content.csv')
+    df_BuzzFeed_fake=pd.read_csv(r'bert_cs_project\dataset_bert\BuzzFeed_fake_news_content.csv')
     ## politiFact
-    df_politiFact_real=pd.read_csv('fakenewsnet/PolitiFact_fake_news_content.csv')
-    df_politiFact_fake=pd.read_csv('fakenewsnet/PolitiFact_real_news_content.csv')
+    df_politiFact_real=pd.read_csv(r'bert_cs_project\dataset_bert\PolitiFact_real_news_content.csv')
+    df_politiFact_fake=pd.read_csv(r'bert_cs_project\dataset_bert\PolitiFact_fake_news_content.csv')
 
     ## combine these two dataframes into a single dataframe
     #df_BuzzFeed_real['image'] = df_BuzzFeed_real.apply(lambda x: Image.open(f"dataset_images/{x.name}.jpg") if os.path.exists(f"dataset_images/{x.name}.jpg") else None, axis=1)
@@ -234,9 +250,9 @@ if __name__ == '__main__':
     ##分成測試集和訓練集 , 取30%資料為測試集
     text_train, text_test, label_train, label_test = train_test_split(content_text, label_text, test_size=0.3, random_state=42)
     
-    train_data = [{'text': text, 'label': label} for text, label in zip(text_train, label_train)]
-    test_data = [{'text': text, 'label': label} for text, label in zip(text_test, label_test)]
-
+    train_data = list(map(lambda x: {'text': x[0], 'label': x[1]}, zip(text_train, label_train)))
+    test_data = list(map(lambda x: {'text': x[0], 'label': x[1]}, zip(text_test, label_test)))
+    #print(label_train,text_train)
     train_dataloader = DataLoader(dataset=train_data, batch_size=batchsize, shuffle=True)
     test_dataloader = DataLoader(dataset=test_data, batch_size=batchsize, shuffle=False)
     ##============================================================
@@ -262,7 +278,10 @@ if __name__ == '__main__':
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     model.to(device)
 
-    
+    # checkpoint frequency
+    save_frequency = 5
+
+
     # training loop
     model.train()
     for epoch in range(num_epochs):
@@ -271,16 +290,29 @@ if __name__ == '__main__':
 
             # ========================================            
             text_inputs = batch['text']
-            labels = batch['label'].to(device)
+            #labels = batch['label'].to(device)
+            # 定义标签映射
+            label_to_index = {"real": 0, "fake": 1, "unknown": 2}
+            # 将 labels 转换为数值，并创建 PyTorch 张量
+            labels = torch.tensor(list(map(lambda label: label_to_index.get(label.lower(), label_to_index['unknown']) if label is not None else label_to_index['unknown'], batch['label']))).to(device)
 
-            text_inputs = [text.to(device) for text in text_inputs]  # 需要根據實際情況調整
+
+            #text_inputs = [text.to(device) for text in text_inputs]  # 需要根據實際情況調整
+            # 1. 先使用tokenizer将文本转换为模型的输入格式
+            tokenized_inputs = model.tokenizer(text_inputs, return_tensors='pt', padding=True, truncation=True, max_length=256)
+
+            # 2. 然后将这些张量转移到设备上
+            input_ids = tokenized_inputs['input_ids'].to(device)
+            attention_mask = tokenized_inputs['attention_mask'].to(device)
+
 
             # Forward pass
             outputs = model({'text': text_inputs})
             # ========================================
             # outputs = model(**batch)
             
-            # Compute Loss 
+            # Compute Loss
+            #print(labels.shape, outputs.shape) 
             loss = custom_criterion(labels, outputs, batch) #wait loss function completed
             # loss = custom_criterion(labels, outputs, batch) #wait loss function completed
             loss.backward()
@@ -289,8 +321,15 @@ if __name__ == '__main__':
             optimizer.step()
             lr_scheduler.step()
             optimizer.zero_grad() #chatGPT: reset gradient → assume gradient init 0
+
+            # save model at each epoch
+
+            if(epoch + 1) % save_frequency == 0:
+                checkpoint_path = f"model/checkpoint_epoch_{epoch + 1}.pth"
+                torch.save(model.state_dict(), checkpoint_path)
     # save model
-    # torch.save(model.state_dict(), "model/")
+    torch.save(model.state_dict(), "model/final_model.pth")
+    print("Final model saved.")
 
     # test loop
     ### copy from huggingface "fine-tune a pretrained model"
