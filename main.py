@@ -123,8 +123,14 @@ class Custom_loss(nn.Module):
         # cos_sim(x, sp)
         cos_sim_pos = torch.tensor([F.cosine_similarity(input['feature'], s_p['feature'], dim=1) for s_p in S_p])
         # cos_sim(x, sn)
-        cos_sim_neg = torch.tensor([F.cosine_similarity(input['feature'], s_n['feature'], dim=1) for s_n in S_n])
-        
+        #cos_sim_neg = torch.tensor([F.cosine_similarity(input['feature'], s_n['feature'], dim=1) for s_n in S_n])
+        cos_sim_neg = [F.cosine_similarity(torch.tensor(input['feature'], dtype=torch.float32),
+                                   torch.tensor(s_n['feature'], dtype=torch.float32), dim=1)
+               for s_n in S_n]
+
+        # 如果你需要将列表转换为 Tensor，你可以在计算完相似度之后再执行这一步：
+        cos_sim_neg = torch.stack(cos_sim_neg)
+
         # Compute the numerator and denominator of the loss
         # exp(cos(x, sp))
         numerator = torch.exp(cos_sim_pos)
@@ -191,6 +197,9 @@ class Fake_news_detection(nn.Module):
     y = self.dropout(y) 
     y = self.sigmoid(y)
 
+
+    #print(f"Output shape after pooling: {y.shape}")
+
     return y
 
 # parameter
@@ -202,8 +211,11 @@ num_epochs = 100
 
 
 if __name__ == '__main__':
+
+    #check dict
+
+    os.makedirs("model", exist_ok=True)
     
-    # load model if exists, o.w. new 
     model = Fake_news_detection()
     #if (os.path.exists("model/")):
         #checkpoint = torch.load(PATH)
@@ -299,7 +311,10 @@ if __name__ == '__main__':
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     model.to(device)
 
-    
+    # checkpoint frequency
+    save_frequency = 5
+
+
     # training loop
     model.train()
     for epoch in range(num_epochs):
