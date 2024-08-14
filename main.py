@@ -199,7 +199,7 @@ class Fake_news_detection(nn.Module):
 
 
     print(f"Output shape after pooling: {y.shape}")
-
+    
     return y
 
 # parameter
@@ -207,7 +207,7 @@ joint_learning_weight = 0.2
 sample_set_size = 5
 batchsize = 16
 learning_rate = 5e-6
-num_epochs = 100
+num_epochs = 1
 
 
 if __name__ == '__main__':
@@ -217,10 +217,12 @@ if __name__ == '__main__':
     os.makedirs("model", exist_ok=True)
     
     model = Fake_news_detection()
-    #if (os.path.exists("model/")):
-        #checkpoint = torch.load(PATH)
-        #model.load_state_dict(checkpoint)
-
+    if os.path.exists("model/checkpoint.pth"):
+        checkpoint = torch.load("model/checkpoint.pth")
+        model.load_state_dict(checkpoint)
+        print("Loaded model from checkpoint.")
+    else:
+        print("No checkpoint found, starting with a new model.")
     # load dataset
     # code參考來源 確認執行正常後刪除
     # https://discuss.huggingface.co/t/how-to-load-a-huggingface-dataset-from-local-path/53076 
@@ -353,16 +355,40 @@ if __name__ == '__main__':
             optimizer.step()
             lr_scheduler.step()
             optimizer.zero_grad() #chatGPT: reset gradient → assume gradient init 0
+            # save model at each epoch
+
+            if(epoch + 1) % save_frequency == 0:
+                checkpoint_path = f"model/checkpoint_epoch_{epoch + 1}.pth"
+                torch.save(model.state_dict(), checkpoint_path)
+    # save model
+    torch.save(model.state_dict(), "model/final_model.pth")
+    print("Final model saved.")
+    
     # save model
     # torch.save(model.state_dict(), "model/")
-    torch.save() #設checkpoint
+    #orch.save() #設checkpoint
 
     # test loop
     ### copy from huggingface "fine-tune a pretrained model"
     metric = evaluate.load("accuracy")
     model.eval() # setting, eval mode
-    for batch in test_dataloader: # huggingface turtorial need to check how to access batch
-        batch = {k: v.to(device) for k, v in batch.items()}
+    tokenizer = BertModel.from_pretrained('bert-base-uncased')
+
+    for batch in test_dataloader:
+        # 將文本轉換為 tokens
+        encoding = tokenizer(batch['text'], padding=True, truncation=True, return_tensors='pt')
+
+        # 將 encoding 移動到指定設備上
+        input_ids = encoding['input_ids'].to(device)
+        attention_mask = encoding['attention_mask'].to(device)
+        labels = torch.tensor(batch['labels']).to(device)
+
+        batch = {
+            'input_ids': input_ids,
+            'attention_mask': attention_mask,
+            'labels': labels
+        }
+
         with torch.no_grad():
             outputs = model(**batch)
 
