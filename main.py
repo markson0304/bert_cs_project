@@ -198,7 +198,7 @@ class Fake_news_detection(nn.Module):
     y = self.sigmoid(y)
 
 
-    #print(f"Output shape after pooling: {y.shape}")
+    print(f"Output shape after pooling: {y.shape}")
 
     return y
 
