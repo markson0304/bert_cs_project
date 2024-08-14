@@ -15,6 +15,7 @@ import os
 from sklearn.model_selection import train_test_split
 from sklearn.utils import shuffle
 from PIL import Image
+from tqdm import tqdm
 
 def SSA(T: List[Dict], x, k: int): # Sample Search Approach for contrastive learning
     # args:
@@ -314,12 +315,14 @@ if __name__ == '__main__':
     model.to(device)
 
     # checkpoint frequency
-    save_frequency = 5
+    save_frequency = 1
 
 
     # training loop
     model.train()
     for epoch in range(num_epochs):
+        progress_bar = tqdm(train_dataloader, desc=f"Epoch {epoch + 1}/{num_epochs}", leave=True)
+
         for batch in train_dataloader: # huggingface turtorial need to check how to access batch
             #batch = {k: v.to(device) for k, v in batch.items()}
 
@@ -358,7 +361,7 @@ if __name__ == '__main__':
             # save model at each epoch
 
             if(epoch + 1) % save_frequency == 0:
-                checkpoint_path = f"model/checkpoint_epoch_{epoch + 1}.pth"
+                checkpoint_path = f"model/checkpoint.pth"
                 torch.save(model.state_dict(), checkpoint_path)
     # save model
     torch.save(model.state_dict(), "model/final_model.pth")
