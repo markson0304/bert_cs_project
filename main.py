@@ -216,7 +216,7 @@ if __name__ == '__main__':
     #check dict
 
     os.makedirs("model", exist_ok=True)
-    
+    start_epoch = 0
     model = Fake_news_detection()
     if os.path.exists("model/checkpoint.pth"):
         checkpoint = torch.load("model/checkpoint.pth")
