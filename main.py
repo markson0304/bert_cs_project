@@ -220,7 +220,8 @@ if __name__ == '__main__':
     model = Fake_news_detection()
     if os.path.exists("model/checkpoint.pth"):
         checkpoint = torch.load("model/checkpoint.pth")
-        model.load_state_dict(checkpoint)
+        model.load_state_dict(checkpoint['model_state_dict'])
+        start_epoch = checkpoint['epoch'] + 1  # 从下一个 epoch 开始
         print("Loaded model from checkpoint.")
     else:
         print("No checkpoint found, starting with a new model.")
@@ -320,7 +321,7 @@ if __name__ == '__main__':
 
     # training loop
     model.train()
-    for epoch in range(num_epochs):
+    for epoch in range(start_epoch,num_epochs):
         progress_bar = tqdm(train_dataloader, desc=f"Epoch {epoch + 1}/{num_epochs}", leave=True)
 
         for batch in train_dataloader: # huggingface turtorial need to check how to access batch
@@ -362,7 +363,12 @@ if __name__ == '__main__':
 
             if(epoch + 1) % save_frequency == 0:
                 checkpoint_path = f"model/checkpoint.pth"
-                torch.save(model.state_dict(), checkpoint_path)
+                #torch.save(model.state_dict(), checkpoint_path)
+                torch.save({
+                'epoch': epoch,
+                'model_state_dict': model.state_dict(),
+            }, checkpoint_path)
+    
     # save model
     torch.save(model.state_dict(), "model/final_model.pth")
     print("Final model saved.")
@@ -374,7 +380,7 @@ if __name__ == '__main__':
     # test loop
     ### copy from huggingface "fine-tune a pretrained model"
     metric = evaluate.load("accuracy")
-    model.eval() # setting, eval mode
+    #model.eval() # setting, eval mode
     tokenizer = BertModel.from_pretrained('bert-base-uncased')
 
     for batch in test_dataloader:
@@ -391,6 +397,7 @@ if __name__ == '__main__':
             'attention_mask': attention_mask,
             'labels': labels
         }
+        model.eval() # setting, eval mode
 
         with torch.no_grad():
             outputs = model(**batch)
