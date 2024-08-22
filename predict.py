@@ -1,0 +1,34 @@
+from transformers import AutoModelForSequenceClassification, AutoTokenizer
+import torch
+
+# 加載微調過的模型和標記器
+model_path = './test_trainer/checkpoint-375'
+model = AutoModelForSequenceClassification.from_pretrained(model_path)
+tokenizer = AutoTokenizer.from_pretrained(model_path)
+
+# 要進行預測的輸入文本
+texts = ["This is a great product!", "I am not happy with the service."]
+
+# 使用標記器將文本轉換為模型輸入格式
+inputs = tokenizer(texts, padding=True, truncation=True, return_tensors="pt")
+
+# 將模型設置為評估模式
+model.eval()
+
+# 禁用梯度計算
+with torch.no_grad():
+    outputs = model(**inputs)
+
+# 獲取預測結果
+logits = outputs.logits
+
+# 將logits轉換為概率分佈
+probabilities = torch.nn.functional.softmax(logits, dim=-1)
+
+# 獲取每個文本的預測標籤
+predictions = torch.argmax(probabilities, dim=-1)
+
+# 打印預測結果
+for text, pred in zip(texts, predictions):
+    print(f"Text: {text}")
+    print(f"Predicted class: {pred.item()}")

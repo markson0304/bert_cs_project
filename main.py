@@ -156,7 +156,7 @@ class Fake_news_detection(nn.Module):
   def __init__ (self):
     super(Fake_news_detection, self).__init__()
     self.bert = 'bert-base-uncased' #find huggingface pretrained bert
-    self.resnet = 'microsoft/resnet-50' #find huggingface pretrained ResNet50
+    #self.resnet = 'microsoft/resnet-50' #find huggingface pretrained ResNet50
     
     # Bert extracts text feature
     self.tokenizer = AutoTokenizer.from_pretrained(self.bert)
@@ -194,6 +194,7 @@ class Fake_news_detection(nn.Module):
     # y = self.dropout(y)
     # y = self.sigmoid(y)
     ##
+    #print((feature_text),feature_text.shape)
     y = self.pool1(feature_text.permute(0, 2, 1)).squeeze(-1)  # permute to [batch_size, feature_dim, seq_length]
     y = self.dropout(y) 
     y = self.sigmoid(y)
@@ -368,7 +369,6 @@ if __name__ == '__main__':
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
             }, checkpoint_path)
-    
     # save model
     torch.save(model.state_dict(), "model/final_model.pth")
     print("Final model saved.")
@@ -381,11 +381,12 @@ if __name__ == '__main__':
     ### copy from huggingface "fine-tune a pretrained model"
     metric = evaluate.load("accuracy")
     #model.eval() # setting, eval mode
-    tokenizer = BertModel.from_pretrained('bert-base-uncased')
+    #tokenizer = BertModel.from_pretrained('bert-base-uncased')
+    #tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
 
     for batch in test_dataloader:
         # 將文本轉換為 tokens
-        encoding = tokenizer(batch['text'], padding=True, truncation=True, return_tensors='pt')
+        encoding = model(batch['text'], padding=True, truncation=True, return_tensors='pt')
 
         # 將 encoding 移動到指定設備上
         input_ids = encoding['input_ids'].to(device)
