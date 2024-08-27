@@ -2,9 +2,9 @@ from transformers import AutoModelForSequenceClassification, AutoTokenizer
 import torch
 
 # 加載微調過的模型和標記器
-model_path = './test_trainer/checkpoint-375'
+model_path = "results/checkpoint-375"
 model = AutoModelForSequenceClassification.from_pretrained(model_path)
-tokenizer = AutoTokenizer.from_pretrained(model_path)
+tokenizer = AutoTokenizer.from_pretrained('bert-base-cased')
 
 # 要進行預測的輸入文本
 texts = ["This is a great product!", "I am not happy with the service."]

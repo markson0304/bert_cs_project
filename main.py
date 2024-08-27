@@ -5,7 +5,8 @@ import evaluate
 from transformers import Trainer, TrainingArguments, AutoModelForSequenceClassification, AutoTokenizer
 
 # 設置檢查點路徑
-checkpoint_dir = './test_trainer/checkpoint-375'
+output_dir='./results'         # 輸出目錄
+checkpoint_dir = os.path.join(output_dir, 'checkpoint-375')
 
 # 加載數據集
 dataset = load_dataset("yelp_review_full")
@@ -32,7 +33,7 @@ def compute_metrics(eval_pred):
 
 # 訓練參數設置
 training_args = TrainingArguments(
-    output_dir='./results',          # 輸出目錄
+    output_dir=output_dir,          # 輸出目錄
     num_train_epochs=3,              # 訓練輪數
     per_device_train_batch_size=8,   # 每個設備的訓練批量大小
     per_device_eval_batch_size=8,    # 每個設備的評估批量大小
@@ -48,6 +49,7 @@ training_args = TrainingArguments(
 
 # 檢查是否有現存的檢查點
 if os.path.exists(checkpoint_dir):
+    print("start from checkpoint")
     # 從檢查點加載模型
     model = AutoModelForSequenceClassification.from_pretrained(checkpoint_dir)
 
@@ -59,8 +61,9 @@ if os.path.exists(checkpoint_dir):
         eval_dataset=small_eval_dataset,
         compute_metrics=compute_metrics,
     )
-    trainer.train(resume_from_checkpoint=checkpoint_dir)
+    trainer.train(resume_from_checkpoint='./results/checkpoint-375')
 else:
+    print("start from beggining")
     # 如果沒有檢查點，從頭開始訓練
     model = AutoModelForSequenceClassification.from_pretrained("bert-base-cased", num_labels=5)
     trainer = Trainer(
@@ -72,6 +75,7 @@ else:
     )
     trainer.train()
 
-    # 儲存模型和狀態
-    trainer.save_model('./test_trainer')
-    trainer.save_state()
+
+# 儲存模型和狀態
+trainer.save_model(output_dir)
+trainer.save_state()
