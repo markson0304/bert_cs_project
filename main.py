@@ -1,27 +1,47 @@
 import os
-from datasets import load_dataset
+#from datasets import load_dataset
 import numpy as np
 import evaluate
 from transformers import Trainer, TrainingArguments, AutoModelForSequenceClassification, AutoTokenizer
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from datasets import Dataset, DatasetDict
 
 # 設置檢查點路徑
 output_dir='./results'         # 輸出目錄
 checkpoint_dir = os.path.join(output_dir, 'checkpoint-375')
 
 # 加載數據集
-dataset = load_dataset("yelp_review_full")
+#dataset = load_dataset("yelp_review_full")
+data = pd.read_csv("recovery-news-data.csv")
+#social_media_data = pd.read_csv("recovery-social-media-data.csv")
+#data = pd.concat([news_data, social_media_data], ignore_index = True)
+data["text"] = data["title"] + " " + data["body_text"]
+data = data[["text", "reliability"]]  # 保留 text跟label
+data = data.dropna(subset=["text"])  # 去除文本为空的行
+data = data.dropna(subset=["reliability"])  # 去除 reliability 列为空的行
+
+data = data.rename(columns={"reliability": "labels"})
+
+
+dataset = Dataset.from_pandas(data)
+
+dataset = dataset.train_test_split(test_size=0.2, seed=42)
+train_dataset = dataset['train']
+test_dataset = dataset['test']
 
 # 處理數據集
 tokenizer = AutoTokenizer.from_pretrained("bert-base-cased")
 
 def tokenize_function(examples):
-    return tokenizer(examples["text"], padding="max_length", truncation=True)
+    return tokenizer(examples["text"], padding="max_length", truncation=True, max_length=512)
 
-tokenized_datasets = dataset.map(tokenize_function, batched=True)
+train_dataset = train_dataset.map(tokenize_function, batched=True)
+test_dataset = test_dataset.map(tokenize_function, batched=True)
 
 # 選取較小的訓練和評估集進行快速測試
-small_train_dataset = tokenized_datasets["train"].shuffle(seed=42).select(range(1000))
-small_eval_dataset = tokenized_datasets["test"].shuffle(seed=42).select(range(1000))
+small_train_dataset = train_dataset.select(range(min(len(train_dataset), 1000)))
+small_eval_dataset = test_dataset.select(range(min(len(test_dataset), 1000)))
 
 # 設置評估指標
 metric = evaluate.load("accuracy")
@@ -41,7 +61,7 @@ training_args = TrainingArguments(
     weight_decay=0.01,               # 權重衰減
     logging_dir='./logs',            # 日誌目錄
     logging_steps=10,
-    save_steps=100,                  # 儲存檢查點的步數間隔
+    save_steps=50,                  # 儲存檢查點的步數間隔
     save_total_limit=2               # 只保留最新的兩個檢查點
 )
 
@@ -65,7 +85,7 @@ if os.path.exists(checkpoint_dir):
 else:
     print("start from beggining")
     # 如果沒有檢查點，從頭開始訓練
-    model = AutoModelForSequenceClassification.from_pretrained("bert-base-cased", num_labels=5)
+    model = AutoModelForSequenceClassification.from_pretrained("bert-base-cased", num_labels=2)
     trainer = Trainer(
         model=model,
         args=training_args,
