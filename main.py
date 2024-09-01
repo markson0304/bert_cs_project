@@ -14,14 +14,26 @@ checkpoint_dir = os.path.join(output_dir, 'checkpoint-375')
 # 加載數據集
 #dataset = load_dataset("yelp_review_full")
 data = pd.read_csv("recovery-news-data.csv")
+total_rows_before = len(data)
+
 #social_media_data = pd.read_csv("recovery-social-media-data.csv")
 #data = pd.concat([news_data, social_media_data], ignore_index = True)
 data["text"] = data["title"] + " " + data["body_text"]
+data = data.dropna(subset=["title"])  # 去除文本为空的行
+
+dropped_title_count = total_rows_before - len(data)
+
+dropped_content_count = total_rows_before - dropped_title_count- len(data)
+
 data = data[["text", "reliability"]]  # 保留 text跟label
 data = data.dropna(subset=["text"])  # 去除文本为空的行
+
 data = data.dropna(subset=["reliability"])  # 去除 reliability 列为空的行
 
 data = data.rename(columns={"reliability": "labels"})
+
+print(f"Rows dropped due to empty title: {dropped_title_count}")
+print(f"Rows dropped due to empty content: {dropped_content_count}")
 
 
 dataset = Dataset.from_pandas(data)
@@ -42,6 +54,7 @@ test_dataset = test_dataset.map(tokenize_function, batched=True)
 # 選取較小的訓練和評估集進行快速測試
 small_train_dataset = train_dataset.select(range(min(len(train_dataset), 1000)))
 small_eval_dataset = test_dataset.select(range(min(len(test_dataset), 1000)))
+
 
 # 設置評估指標
 metric = evaluate.load("accuracy")
