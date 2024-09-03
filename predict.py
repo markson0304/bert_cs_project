@@ -2,13 +2,13 @@ from transformers import AutoModelForSequenceClassification, AutoTokenizer
 import torch
 
 # 加載微調過的模型和標記器
-model_path = "results/checkpoint-375"
+model_path = "results/checkpoint-1015"
 model = AutoModelForSequenceClassification.from_pretrained(model_path)
 tokenizer = AutoTokenizer.from_pretrained('bert-base-cased')
 
 # 要進行預測的輸入文本
-titles = ["Everything you need to know about the coronavirus","Novel Coronavirus Cases Confirmed To Be Spreading"]
-contents = ["Public health experts around the globe are scrambling to understand, track, and contain a new virus that appeared in Wuhan, China, at the beginning of December 2019. The World Health Organization (WHO) named the disease caused by the virus COVID-19.","The first two coronavirus cases in Europe have been detected in France, and a second case has been confirmed in America as China expands its efforts to control its outbreak."]
+titles = ["Nearly half of Twitter accounts discussing coronavirus are likely bots, researchers say","Mapping the worldwide spread of the coronavirus"]
+contents = ["Nearly half of the Twitter accounts sharing information about the novel coronavirus are likely bots, according to researchers at Carnegie Mellon University.","World Mapping the worldwide spread of the coronavirus Warning: This graphic requires JavaScript. Please enable JavaScript for the best experience."]
 texts = [f"{title} {content}" for title, content in zip(titles, contents)]
 
 # 使用標記器將文本轉換為模型輸入格式
