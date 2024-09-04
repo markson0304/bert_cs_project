@@ -11,7 +11,6 @@ from sklearn.metrics import confusion_matrix, classification_report
 
 # 設置檢查點路徑
 output_dir='./results'         # 輸出目錄
-checkpoint_dir = os.path.join(output_dir, 'checkpoint-1015')
 
 """# 資料集預處理
 
@@ -55,9 +54,14 @@ def tokenize_function(examples):
 train_dataset = train_dataset.map(tokenize_function, batched=True)
 test_dataset = test_dataset.map(tokenize_function, batched=True)
 
+
 # Filter out samples that exceed max_length
 train_dataset = train_dataset.filter(lambda example: example["valid"])
 test_dataset = test_dataset.filter(lambda example: example["valid"])
+
+print(f"length of train_set",len(train_dataset))
+print(f"length of tset_set",len(test_dataset))
+
 
 # Remove the 'valid' column as it's no longer needed
 train_dataset = train_dataset.remove_columns(["valid"])
@@ -90,10 +94,19 @@ training_args = TrainingArguments(
 """# 訓練模型"""
 
 # 檢查是否有現存的檢查點
-if os.path.exists(checkpoint_dir):
+
+last_checkpoint = None
+
+if os.path.isdir(output_dir) and len(os.listdir(output_dir)) > 0:
     print("start from checkpoint")
+# 获取最近保存的检查点路径
+    checkpoints = [os.path.join(output_dir, d) for d in os.listdir(output_dir) if d.startswith("checkpoint-")]
+    if checkpoints:
+        last_checkpoint = max(checkpoints, key=os.path.getctime)  # 获取最新的检查点路径
+        print(f"chepoints!!!!!!!!!!!!!",last_checkpoint)
+        model = AutoModelForSequenceClassification.from_pretrained(last_checkpoint)
+
     # 從檢查點加載模型
-    model = AutoModelForSequenceClassification.from_pretrained(checkpoint_dir)
 else:
     print("start from beginning")
     # 如果沒有檢查點，從頭開始訓練
@@ -109,8 +122,8 @@ trainer = Trainer(
 
 
 # 訓練模型
-if os.path.exists(checkpoint_dir):
-    trainer.train(resume_from_checkpoint=checkpoint_dir)
+if os.path.exists(output_dir):
+    trainer.train(resume_from_checkpoint=last_checkpoint)
 else:
     trainer.train()
 
